@@ -48,6 +48,7 @@ def process_ticker(ticker, training_start, testing_end_date):
 
     csv_filename = ticker + '_result.csv'
     df_result.to_csv(csv_filename)
+    print(ticker + ' done')
     return df_result
 
 
