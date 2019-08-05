@@ -3,68 +3,56 @@ import ValueAtRisk as Risk
 import yfinance as yf
 
 # Define constants
-holding_period = 10
-t_period = 250
-
-training_start = '2012-12-01'
-training_end = '2018-01-01'
-
-testing_start = '2017-12-01'
-testing_end = '2019-01-01'
-
-# Define output CSV headers
-headers = ['Ticker',
-           'VaR@99.5%', 'VaR@99.0%', 'VaR@98.5%', 'VaR@98.0%', 'VaR@97.5%', 'ES',
-           'Excep@99.5%', 'Excep@99.0%', 'Excep@98.5%', 'Excep@98.0%', 'Excep@97.5%', 'Excep@ES%']
+TRAINING_PERIOD = 250
 
 # Define tickers lists
-tickers_technology = ['MSFT','AAPL','V','MA','CSCO','INTC','ADBE','ORCL','SAP.DE','PYPL',
-                      'IBM','CRM','AVGO','ACN','TXN','NVDA','ASML.AS','ADP','QCOM','INTU']
-tickers_banks = ['JPM','BAC','WFC','HSBA.L','C','RY.TO','TD.TO','CBA.AX','USB','SAN.MC',
-                 'BNS.TO','WBC.AX','8306.T','LLOY.L','BNP.PA','ANZ.AX','INGA.AS','BMO.TO','NAB.AX','8316.T']
+tickers_technology = ['^GSPC','MSFT','AAPL','CSCO','INTC','ADBE','ORCL','SAP.DE','IBM','NVDA','ASML.AS']
+tickers_banks = ['JPM','BAC','WFC','HSBA.L','C','RY.TO','TD.TO','CBA.AX','USB','SAN.MC']
+tickers = tickers_technology + tickers_banks
 
 
+# Download stock prices data from Yahoo Finance for the ticker
 def download_data(ticker, start_date, end_date):
     stock_data = yf.download(ticker, start=start_date, end=end_date)
     stock_prices = stock_data['Adj Close']
-    stock_returns = stock_prices.pct_change(holding_period).dropna()
-    return stock_returns
+    return stock_prices
 
 
-def process_ticker(ticker):
-    # Download training and backtesting data
-    training_data = download_data(ticker, training_start, training_end)
-    testing_data = download_data(ticker, testing_start, testing_end).tail(t_period)
+# Download stock prices, compute VaR and ES and output result for each ticker
+def process_ticker(ticker, training_start, testing_end_date):
+    # Download training data
+    stock_prices = download_data(ticker, training_start, testing_end_date)
 
-    # Calculate VaR at all 5 confidence levels
-    var_975 = Risk.value_at_risk(training_data, 0.025)
-    var_980 = Risk.value_at_risk(training_data, 0.02)
-    var_985 = Risk.value_at_risk(training_data, 0.015)
-    var_990 = Risk.value_at_risk(training_data, 0.01)
-    var_995 = Risk.value_at_risk(training_data, 0.005)
+    # Calculate the 1-day returns for training the VaR models
+    daily_returns = stock_prices.pct_change(1).dropna()
 
-    # Calculate Expected Shortfall
-    es = Risk.expected_shortfall(training_data, 0.025)
+    # Calculate the 10-days returns for training the ES models
+    ten_days_returns = stock_prices.pct_change(10).dropna()
 
-    # Backtesting
-    exceptions_975 = Risk.backtesting(testing_data, var_975)
-    exceptions_980 = Risk.backtesting(testing_data, var_980)
-    exceptions_985 = Risk.backtesting(testing_data, var_985)
-    exceptions_990 = Risk.backtesting(testing_data, var_990)
-    exceptions_995 = Risk.backtesting(testing_data, var_995)
-    exceptions_es = Risk.backtesting(testing_data, es)
+    df_result = pd.DataFrame(columns=['Day','Ticker','VaR','ES','Actual_Loss','Is VaR good','Is ES good'])
+    no_of_returns = len(ten_days_returns)
+    for day in range(1,no_of_returns):
+        testing_data = daily_returns[-day]
+        var_training_data = daily_returns[:-day].tail(TRAINING_PERIOD)
+        es_training_data = ten_days_returns[:-day].tail(TRAINING_PERIOD)
+        # Calculate VaR at all 5 confidence levels
+        var_990 = Risk.value_at_risk(var_training_data, 0.01)
 
-    result = [ticker, var_995, var_990, var_985, var_980, var_975, es,
-              exceptions_995, exceptions_990, exceptions_985, exceptions_980, exceptions_975, exceptions_es]
+        # Calculate Expected Shortfall
+        es = Risk.expected_shortfall(es_training_data, 0.025)
 
-    return result
+        date = daily_returns.index.values[-day]
+
+        result = [date, ticker, var_990, es, testing_data, (testing_data > var_990), (testing_data > es)]
+        df_result = df_result.append(pd.Series(result, index=df_result.columns), ignore_index=True)
+
+    csv_filename = ticker + '_result.csv'
+    df_result.to_csv(csv_filename)
+    return df_result
 
 
-df = pd.DataFrame(columns=headers)
-tickers = tickers_technology + tickers_banks
+# Main
+training_start_date = '2001-12-01'
+testing_date_plus_one = '2019-01-01'
 for ticker in tickers:
-    print(ticker)
-    result = process_ticker(ticker)
-    df = df.append(pd.Series(result, index=df.columns), ignore_index=True)
-
-df.to_csv('output.csv')
+    result = process_ticker(ticker, training_start_date, testing_date_plus_one)
