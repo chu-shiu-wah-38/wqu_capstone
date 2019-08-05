@@ -24,5 +24,11 @@ yfinance - see https://pypi.org/project/fix-yahoo-finance for more information
 6. Run “Main.py” by typing “Python Main.py” in command prompt/shell.
 
 
+## Python files included
+Main.py - the main python script
+ValueAtRisk.py - script containing functions to compute ValueAtRisk and Expected Shortfall
+ValueAtRisk_test.py - unit testing for ValueAtRisk.py
+
 ## Usage examples
 The program runs automatically.
+Sample output are in output folder.
