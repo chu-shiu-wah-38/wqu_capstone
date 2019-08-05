@@ -34,16 +34,3 @@ def expected_shortfall(returns, confidence_level):
     es = worst_returns.mean()
 
     return es
-
-
-def backtesting(returns, threshold):
-    """
-    Calculate the number of exceptions in returns that
-    :param returns: DataFrame
-    :param threshold: float
-    :return: int
-    """
-
-    exceptions = list(filter(lambda x: x < threshold, returns))
-    print(exceptions)
-    return len(exceptions)
